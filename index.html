@@ -442,6 +442,15 @@ input[type=file]{display:none;}
       <button type="button" class="mode-btn" data-mode="matrix" onclick="setListMode('matrix')">🧭 矩陣</button>
     </div>
     <div class="filter-row">
+      <select class="chip-select" id="sortBy">
+        <option value="deadline">依截止日排序</option>
+        <option value="priority">依象限排序（先做的在前）</option>
+        <option value="created">依建立時間排序</option>
+        <option value="urgent_desc">緊急➜不緊急</option>
+        <option value="urgent_asc">不緊急➜緊急</option>
+        <option value="energy_desc">高耗能➜低耗能</option>
+        <option value="energy_asc">低耗能➜高耗能</option>
+      </select>
       <select class="chip-select" id="filterDomain">
         <option value="all">全部領域</option>
         <option value="content">🎬 自媒體工作</option>
@@ -471,6 +480,7 @@ input[type=file]{display:none;}
           <option value="finance">財務</option>
           <option value="relation">人際</option>
           <option value="errand">雜務</option>
+          <option value="homecare">居服工作</option>
           <option value="other_life">其他生活雜事</option>
         </optgroup>
       </select>
@@ -481,10 +491,11 @@ input[type=file]{display:none;}
         <option value="q3">🤝 不重要緊急</option>
         <option value="q4">🗑 不重要不緊急</option>
       </select>
-      <select class="chip-select" id="sortBy">
-        <option value="deadline">依截止日排序</option>
-        <option value="priority">依象限排序（先做的在前）</option>
-        <option value="created">依建立時間排序</option>
+      <select class="chip-select" id="filterEnergy">
+        <option value="all">全部耗能</option>
+        <option value="high">🔥 高耗能</option>
+        <option value="mid">🔋 中耗能</option>
+        <option value="low">🪫 低耗能</option>
       </select>
     </div>
 
@@ -591,6 +602,11 @@ input[type=file]{display:none;}
     </div>
 
     <div class="field">
+      <label>截止日（選填）</label>
+      <input type="date" id="fDeadline">
+    </div>
+
+    <div class="field">
       <label>任務名稱 <span class="req">*</span></label>
       <input type="text" id="fTitle" placeholder="例如：拍攝這週的開箱影片">
     </div>
@@ -613,6 +629,7 @@ input[type=file]{display:none;}
           <option value="finance">財務</option>
           <option value="relation">人際</option>
           <option value="errand">雜務</option>
+          <option value="homecare">居服工作</option>
           <option value="other_life">其他生活雜事</option>
         </optgroup>
       </select>
@@ -638,13 +655,18 @@ input[type=file]{display:none;}
     </div>
 
     <div class="field">
-      <label>預估時間（分鐘）</label>
-      <input type="number" id="fEstimate" placeholder="例如：25" min="5" step="5">
+      <label>這件事需要多少耗能？</label>
+      <div class="seg">
+        <button type="button" data-val="high" onclick="selectSeg('fEnergy',this)">🔥 高耗能</button>
+        <button type="button" data-val="mid" onclick="selectSeg('fEnergy',this)">🔋 中耗能</button>
+        <button type="button" data-val="low" onclick="selectSeg('fEnergy',this)">🪫 低耗能</button>
+      </div>
+      <input type="hidden" id="fEnergy" value="mid">
     </div>
 
     <div class="field">
-      <label>截止日（選填）</label>
-      <input type="date" id="fDeadline">
+      <label>預估時間（分鐘）</label>
+      <input type="number" id="fEstimate" placeholder="例如：25" min="5" step="5">
     </div>
 
     <div class="field">
@@ -705,13 +727,13 @@ const LS_META='oneThing_meta_v1';
 
 const CATEGORY_LABEL={
   idea:'選題發想',script:'腳本撰寫',shoot:'拍攝',edit:'剪輯',publish:'上架發布',social:'社群經營',other:'雜項',
-  chore:'🏠 家務',health:'💪 健康',finance:'💰 財務',relation:'👥 人際',errand:'🧾 雜務',other_life:'✳️ 其他生活雜事'
+  chore:'🏠 家務',health:'💪 健康',finance:'💰 財務',relation:'👥 人際',homecare:'🧑‍⚕️ 居服工作',errand:'🧾 雜務',other_life:'✳️ 其他生活雜事'
 };
 const CATEGORY_CLASS={
   idea:'cat-idea',script:'cat-script',shoot:'cat-shoot',edit:'cat-edit',publish:'cat-publish',social:'cat-social',other:'cat-other',
-  chore:'cat-life',health:'cat-life',finance:'cat-life',relation:'cat-life',errand:'cat-life',other_life:'cat-life'
+  chore:'cat-life',health:'cat-life',finance:'cat-life',relation:'cat-life',homecare:'cat-life',errand:'cat-life',other_life:'cat-life'
 };
-const LIFE_CATS=new Set(['chore','health','finance','relation','errand','other_life']);
+const LIFE_CATS=new Set(['chore','health','finance','relation','homecare','errand','other_life']);
 function isLife(cat){ return LIFE_CATS.has(cat); }
 const PRIORITY_LABEL={high:'高',mid:'中',low:'低'};
 
@@ -734,6 +756,9 @@ function getQuadrant(t){
   return 'q4';
 }
 function priorityFromQuadrant(q){ return q==='q1'?'high':(q==='q2'?'mid':'low'); }
+function isUrgent(t){ const q=getQuadrant(t); return q==='q1'||q==='q3'; }
+function getEnergy(t){ return t.energy||'mid'; }
+const ENERGY_LABEL={high:'🔥 高耗能', mid:'🔋 中耗能', low:'🪫 低耗能'};
 const QUADRANT_POINTS={q1:15,q2:12,q3:8,q4:5};
 
 /* ---- 點數與獎勵機制 ---- */
@@ -1064,11 +1089,13 @@ function matrixFilteredTasks(){
   const fd=document.getElementById('filterDomain').value;
   const fs=document.getElementById('filterStatus').value;
   const fc=document.getElementById('filterCategory').value;
+  const fe=document.getElementById('filterEnergy').value;
   return tasks.filter(t=>{
     if(fd==='life' && !isLife(t.category)) return false;
     if(fd==='content' && isLife(t.category)) return false;
-    if(fs!=='all' && t.status!==fs) return false;
+    if(fs==='all'){ if(t.status==='done') return false; } else if(t.status!==fs) return false;
     if(fc!=='all' && t.category!==fc) return false;
+    if(fe!=='all' && getEnergy(t)!==fe) return false;
     if(q && !(t.title.toLowerCase().includes(q) || (t.nextAction||'').toLowerCase().includes(q))) return false;
     return true;
   });
@@ -1078,24 +1105,12 @@ function renderMatrix(){
   ['q1','q2','q3','q4'].forEach(qk=>{
     const list=filtered.filter(t=>getQuadrant(t)===qk)
       .sort((a,b)=>new Date(a.deadline||'2999-12-31')-new Date(b.deadline||'2999-12-31'));
-    const notDone=list.filter(t=>t.status!=='done');
-    const doneList=list.filter(t=>t.status==='done');
-    document.getElementById('qCount'+qk.slice(1)).textContent=notDone.length;
+    document.getElementById('qCount'+qk.slice(1)).textContent=list.length;
     const box=document.getElementById('qList'+qk.slice(1));
     if(list.length===0){
       box.innerHTML=`<div class="empty-state" style="padding:18px 10px;"><p>${qk==='q4'?'這裡空空的，很好 🎉':'目前沒有任務在這個象限。'}</p></div>`;
     } else {
-      let html=notDone.map(taskCardHtml).join('');
-      if(doneList.length===0 && notDone.length===0){
-        html=`<div class="empty-state" style="padding:18px 10px;"><p>${qk==='q4'?'這裡空空的，很好 🎉':'目前沒有任務在這個象限。'}</p></div>`;
-      }
-      if(doneList.length>0){
-        html += `<details class="done-section">
-          <summary>✓ 已完成（${doneList.length}）</summary>
-          ${doneList.map(taskCardHtml).join('')}
-        </details>`;
-      }
-      box.innerHTML=html;
+      box.innerHTML=list.map(taskCardHtml).join('');
     }
   });
 }
@@ -1191,6 +1206,7 @@ function renderList(){
   const fs=document.getElementById('filterStatus').value;
   const fc=document.getElementById('filterCategory').value;
   const fq=document.getElementById('filterQuadrant').value;
+  const fe=document.getElementById('filterEnergy').value;
   const sortBy=document.getElementById('sortBy').value;
 
   let list=tasks.filter(t=>{
@@ -1199,20 +1215,43 @@ function renderList(){
     if(fs!=='all' && t.status!==fs) return false;
     if(fc!=='all' && t.category!==fc) return false;
     if(fq!=='all' && getQuadrant(t)!==fq) return false;
+    if(fe!=='all' && getEnergy(t)!==fe) return false;
     if(q && !(t.title.toLowerCase().includes(q) || (t.nextAction||'').toLowerCase().includes(q))) return false;
     return true;
   });
 
   const prOrder={high:0,mid:1,low:2};
+  const energyOrder={high:0,mid:1,low:2};
+  const deadlineCompare=(a,b)=>{
+    if(!a.deadline && !b.deadline) return new Date(b.createdAt)-new Date(a.createdAt);
+    if(!a.deadline) return 1;
+    if(!b.deadline) return -1;
+    return new Date(a.deadline)-new Date(b.deadline);
+  };
   if(sortBy==='deadline'){
-    list.sort((a,b)=>{
-      if(!a.deadline && !b.deadline) return new Date(b.createdAt)-new Date(a.createdAt);
-      if(!a.deadline) return 1;
-      if(!b.deadline) return -1;
-      return new Date(a.deadline)-new Date(b.deadline);
-    });
+    list.sort(deadlineCompare);
   } else if(sortBy==='priority'){
     list.sort((a,b)=>prOrder[a.priority]-prOrder[b.priority]);
+  } else if(sortBy==='urgent_desc'){
+    list.sort((a,b)=>{
+      const diff=(isUrgent(b)?1:0)-(isUrgent(a)?1:0);
+      return diff!==0?diff:deadlineCompare(a,b);
+    });
+  } else if(sortBy==='urgent_asc'){
+    list.sort((a,b)=>{
+      const diff=(isUrgent(a)?1:0)-(isUrgent(b)?1:0);
+      return diff!==0?diff:deadlineCompare(a,b);
+    });
+  } else if(sortBy==='energy_desc'){
+    list.sort((a,b)=>{
+      const diff=energyOrder[getEnergy(a)]-energyOrder[getEnergy(b)];
+      return diff!==0?diff:deadlineCompare(a,b);
+    });
+  } else if(sortBy==='energy_asc'){
+    list.sort((a,b)=>{
+      const diff=energyOrder[getEnergy(b)]-energyOrder[getEnergy(a)];
+      return diff!==0?diff:deadlineCompare(a,b);
+    });
   } else {
     list.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   }
@@ -1234,8 +1273,8 @@ function renderList(){
     box.innerHTML=html;
   }
 }
-['searchInput'].forEach(id=>document.getElementById(id).addEventListener('input', renderList));
-['filterDomain','filterStatus','filterCategory','filterQuadrant','sortBy'].forEach(id=>document.getElementById(id).addEventListener('change', renderList));
+['searchInput'].forEach(id=>document.getElementById(id).addEventListener('input', renderListPage));
+['filterDomain','filterStatus','filterCategory','filterQuadrant','filterEnergy','sortBy'].forEach(id=>document.getElementById(id).addEventListener('change', renderListPage));
 
 function taskCardHtml(t){
   const priClass = t.priority==='high'?'pri-high':t.priority==='mid'?'pri-mid':'pri-low';
@@ -1249,6 +1288,7 @@ function taskCardHtml(t){
     chips += `<span class="meta-chip ${overdue?'overdue':''}">📅 ${overdue?'已逾期':'截止 '+fmtDate(t.deadline)}</span>`;
   }
   if(t.estimateMinutes) chips += `<span class="meta-chip">⏱ 約 ${t.estimateMinutes} 分</span>`;
+  chips += `<span class="meta-chip">${ENERGY_LABEL[getEnergy(t)]}</span>`;
   if(t.status==='todo' && daysAgo(t.createdAt)>=3) chips += `<span class="meta-chip stale">已躺 ${daysAgo(t.createdAt)} 天</span>`;
   if(t.status==='paused') chips += `<span class="meta-chip">⏸ 擱置中</span>`;
   if(!isDone) chips += `<span class="meta-chip">🎖 完成 +${QUADRANT_POINTS[q]}點</span>`;
@@ -1332,6 +1372,7 @@ function openForm(){
   document.getElementById('fDeadline').value='';
   document.getElementById('fNotes').value='';
   setQuadrant(1,0);
+  setSegValue('fEnergy','mid');
   document.getElementById('formOverlay').classList.add('active');
 }
 function editTask(id){
@@ -1347,6 +1388,7 @@ function editTask(id){
   const q=getQuadrant(t);
   const map={q1:[1,1],q2:[1,0],q3:[0,1],q4:[0,0]}[q];
   setQuadrant(map[0], map[1]);
+  setSegValue('fEnergy', getEnergy(t));
   document.getElementById('formOverlay').classList.add('active');
 }
 function closeForm(){ document.getElementById('formOverlay').classList.remove('active'); }
@@ -1369,6 +1411,7 @@ function saveTask(){
   const now=new Date().toISOString();
   const important=parseInt(document.getElementById('fImportant').value)===1;
   const urgent=parseInt(document.getElementById('fUrgent').value)===1;
+  const energy=document.getElementById('fEnergy').value;
   const q=(important&&urgent)?'q1':(important&&!urgent)?'q2':(!important&&urgent)?'q3':'q4';
   const priority=priorityFromQuadrant(q);
   if(editingId){
@@ -1376,6 +1419,7 @@ function saveTask(){
     t.title=title; t.category=document.getElementById('fCategory').value;
     t.nextAction=nextAction;
     t.important=important; t.urgent=urgent; t.priority=priority;
+    t.energy=energy;
     t.estimateMinutes=parseInt(document.getElementById('fEstimate').value)||null;
     t.deadline=document.getElementById('fDeadline').value||null;
     t.notes=document.getElementById('fNotes').value.trim();
@@ -1384,7 +1428,7 @@ function saveTask(){
   } else {
     tasks.push({
       id:uid(), title, category:document.getElementById('fCategory').value,
-      nextAction, important, urgent, priority,
+      nextAction, important, urgent, priority, energy,
       estimateMinutes:parseInt(document.getElementById('fEstimate').value)||null,
       deadline:document.getElementById('fDeadline').value||null,
       notes:document.getElementById('fNotes').value.trim(),
