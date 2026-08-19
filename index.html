@@ -1067,7 +1067,7 @@ function matrixFilteredTasks(){
   return tasks.filter(t=>{
     if(fd==='life' && !isLife(t.category)) return false;
     if(fd==='content' && isLife(t.category)) return false;
-    if(fs==='all'){ if(t.status==='done') return false; } else if(t.status!==fs) return false;
+    if(fs!=='all' && t.status!==fs) return false;
     if(fc!=='all' && t.category!==fc) return false;
     if(q && !(t.title.toLowerCase().includes(q) || (t.nextAction||'').toLowerCase().includes(q))) return false;
     return true;
@@ -1076,15 +1076,26 @@ function matrixFilteredTasks(){
 function renderMatrix(){
   const filtered=matrixFilteredTasks();
   ['q1','q2','q3','q4'].forEach(qk=>{
-    let list=filtered.filter(t=>getQuadrant(t)===qk)
+    const list=filtered.filter(t=>getQuadrant(t)===qk)
       .sort((a,b)=>new Date(a.deadline||'2999-12-31')-new Date(b.deadline||'2999-12-31'));
-    list=list.filter(t=>t.status!=='done').concat(list.filter(t=>t.status==='done'));
-    document.getElementById('qCount'+qk.slice(1)).textContent=list.length;
+    const notDone=list.filter(t=>t.status!=='done');
+    const doneList=list.filter(t=>t.status==='done');
+    document.getElementById('qCount'+qk.slice(1)).textContent=notDone.length;
     const box=document.getElementById('qList'+qk.slice(1));
     if(list.length===0){
       box.innerHTML=`<div class="empty-state" style="padding:18px 10px;"><p>${qk==='q4'?'這裡空空的，很好 🎉':'目前沒有任務在這個象限。'}</p></div>`;
     } else {
-      box.innerHTML=list.map(taskCardHtml).join('');
+      let html=notDone.map(taskCardHtml).join('');
+      if(doneList.length===0 && notDone.length===0){
+        html=`<div class="empty-state" style="padding:18px 10px;"><p>${qk==='q4'?'這裡空空的，很好 🎉':'目前沒有任務在這個象限。'}</p></div>`;
+      }
+      if(doneList.length>0){
+        html += `<details class="done-section">
+          <summary>✓ 已完成（${doneList.length}）</summary>
+          ${doneList.map(taskCardHtml).join('')}
+        </details>`;
+      }
+      box.innerHTML=html;
     }
   });
 }
