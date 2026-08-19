@@ -140,6 +140,14 @@ button{cursor:pointer; border:none; background:none;}
 .task-card.pri-low{border-left-color:var(--sage);}
 .task-card.done{opacity:0.55;}
 .task-card.done .task-title{text-decoration:line-through;}
+.done-section{margin-top:6px;}
+.done-section summary{
+  cursor:pointer; font-size:13px; font-weight:700; color:var(--medium);
+  padding:12px 4px; list-style:none; display:flex; align-items:center; gap:7px; user-select:none;
+}
+.done-section summary::-webkit-details-marker{display:none;}
+.done-section summary::before{content:'▸'; font-size:11px; color:var(--gray); transition:transform .2s;}
+.done-section[open] summary::before{content:'▾';}
 .qtag{font-size:11px; font-weight:800; padding:3px 9px; border-radius:20px; white-space:nowrap;}
 .qtag.q1{background:var(--light-pink); color:var(--pink);}
 .qtag.q2{background:var(--light-blue); color:var(--blue);}
@@ -1068,8 +1076,9 @@ function matrixFilteredTasks(){
 function renderMatrix(){
   const filtered=matrixFilteredTasks();
   ['q1','q2','q3','q4'].forEach(qk=>{
-    const list=filtered.filter(t=>getQuadrant(t)===qk)
+    let list=filtered.filter(t=>getQuadrant(t)===qk)
       .sort((a,b)=>new Date(a.deadline||'2999-12-31')-new Date(b.deadline||'2999-12-31'));
+    list=list.filter(t=>t.status!=='done').concat(list.filter(t=>t.status==='done'));
     document.getElementById('qCount'+qk.slice(1)).textContent=list.length;
     const box=document.getElementById('qList'+qk.slice(1));
     if(list.length===0){
@@ -1196,12 +1205,22 @@ function renderList(){
   } else {
     list.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   }
+  // 已完成的任務獨立成可收合區塊，放在最下面
+  const notDone=list.filter(t=>t.status!=='done');
+  const doneList=list.filter(t=>t.status==='done');
 
   const box=document.getElementById('fullList');
   if(list.length===0){
     box.innerHTML=`<div class="empty-state"><div class="ic">🔍</div><p>沒有符合條件的任務。</p></div>`;
   } else {
-    box.innerHTML=list.map(taskCardHtml).join('');
+    let html=notDone.map(taskCardHtml).join('');
+    if(doneList.length>0){
+      html += `<details class="done-section">
+        <summary>✓ 已完成（${doneList.length}）</summary>
+        ${doneList.map(taskCardHtml).join('')}
+      </details>`;
+    }
+    box.innerHTML=html;
   }
 }
 ['searchInput'].forEach(id=>document.getElementById(id).addEventListener('input', renderList));
