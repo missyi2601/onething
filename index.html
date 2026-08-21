@@ -127,8 +127,17 @@ button{cursor:pointer; border:none; background:none;}
 .nudge{
   background:var(--light-pink); border-radius:16px; padding:14px 16px; margin-bottom:14px;
   font-size:13px; color:var(--medium); line-height:1.7; display:flex; gap:10px; align-items:flex-start;
+  cursor:pointer; transition:.15s;
 }
+.nudge:active{transform:scale(0.99); opacity:0.85;}
 .nudge .ic{font-size:16px;}
+.nudge-link{display:block; margin-top:4px; font-weight:700; color:var(--pink);}
+.stale-banner{
+  display:none; align-items:center; justify-content:space-between; gap:10px;
+  background:var(--light-pink); color:var(--pink); font-size:12.5px; font-weight:700;
+  padding:10px 14px; border-radius:14px; margin-bottom:12px;
+}
+.stale-banner button{color:var(--pink); font-weight:700; font-size:12px; padding:4px 8px;}
 
 /* ---------- Task cards ---------- */
 .task-card{
@@ -440,6 +449,10 @@ input[type=file]{display:none;}
     <div class="mode-toggle">
       <button type="button" class="mode-btn sel" data-mode="list" onclick="setListMode('list')">📋 列表</button>
       <button type="button" class="mode-btn" data-mode="matrix" onclick="setListMode('matrix')">🧭 矩陣</button>
+    </div>
+    <div class="stale-banner" id="staleBanner">
+      <span>🌱 只顯示放置 3 天以上還沒開始的任務</span>
+      <button onclick="clearStaleFilter()">✕ 清除</button>
     </div>
     <div class="filter-row">
       <select class="chip-select" id="sortBy">
@@ -903,7 +916,7 @@ function showView(name){
   window.scrollTo(0,0);
 }
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>{
-  b.addEventListener('click', ()=>showView(b.dataset.view));
+  b.addEventListener('click', ()=>{ staleOnly=false; showView(b.dataset.view); });
 });
 
 function toast(msg){
@@ -1048,7 +1061,10 @@ function renderHome(){
   const stale=tasks.filter(t=>t.status==='todo' && daysAgo(t.createdAt)>=3);
   const nudgeArea=document.getElementById('nudgeArea');
   if(stale.length>0){
-    nudgeArea.innerHTML=`<div class="nudge"><span class="ic">🌱</span><span>有 <b>${stale.length}</b> 個任務已經放了 3 天以上都還沒動手。也許不是不想做，只是「下一步」還不夠小——要不要重新拆解一下？</span></div>`;
+    nudgeArea.innerHTML=`<div class="nudge" onclick="showStaleTasks()" role="button">
+      <span class="ic">🌱</span>
+      <span>有 <b>${stale.length}</b> 個任務已經放了 3 天以上都還沒動手。也許不是不想做，只是「下一步」還不夠小——要不要重新拆解一下？<span class="nudge-link">點這裡看看是哪些 ›</span></span>
+    </div>`;
   } else {
     nudgeArea.innerHTML='';
   }
@@ -1072,6 +1088,7 @@ function renderHome(){
    艾森豪矩陣頁
 ========================================================= */
 let listMode='list';
+let staleOnly=false;
 function setListMode(mode){
   listMode=mode;
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('sel', b.dataset.mode===mode));
@@ -1079,6 +1096,16 @@ function setListMode(mode){
   document.getElementById('matrixWrap').style.display = mode==='matrix'?'block':'none';
   document.getElementById('filterQuadrant').style.display = mode==='list'?'':'none';
   document.getElementById('sortBy').style.display = mode==='list'?'':'none';
+  renderListPage();
+}
+function showStaleTasks(){
+  staleOnly=true;
+  document.getElementById('filterStatus').value='todo';
+  setListMode('list');
+  showView('list');
+}
+function clearStaleFilter(){
+  staleOnly=false;
   renderListPage();
 }
 function renderListPage(){
@@ -1209,6 +1236,8 @@ function renderList(){
   const fe=document.getElementById('filterEnergy').value;
   const sortBy=document.getElementById('sortBy').value;
 
+  document.getElementById('staleBanner').style.display = staleOnly?'flex':'none';
+
   let list=tasks.filter(t=>{
     if(fd==='life' && !isLife(t.category)) return false;
     if(fd==='content' && isLife(t.category)) return false;
@@ -1216,6 +1245,7 @@ function renderList(){
     if(fc!=='all' && t.category!==fc) return false;
     if(fq!=='all' && getQuadrant(t)!==fq) return false;
     if(fe!=='all' && getEnergy(t)!==fe) return false;
+    if(staleOnly && !(t.status==='todo' && daysAgo(t.createdAt)>=3)) return false;
     if(q && !(t.title.toLowerCase().includes(q) || (t.nextAction||'').toLowerCase().includes(q))) return false;
     return true;
   });
@@ -1273,8 +1303,8 @@ function renderList(){
     box.innerHTML=html;
   }
 }
-['searchInput'].forEach(id=>document.getElementById(id).addEventListener('input', renderListPage));
-['filterDomain','filterStatus','filterCategory','filterQuadrant','filterEnergy','sortBy'].forEach(id=>document.getElementById(id).addEventListener('change', renderListPage));
+['searchInput'].forEach(id=>document.getElementById(id).addEventListener('input', ()=>{ staleOnly=false; renderListPage(); }));
+['filterDomain','filterStatus','filterCategory','filterQuadrant','filterEnergy','sortBy'].forEach(id=>document.getElementById(id).addEventListener('change', ()=>{ staleOnly=false; renderListPage(); }));
 
 function taskCardHtml(t){
   const priClass = t.priority==='high'?'pri-high':t.priority==='mid'?'pri-mid':'pri-low';
